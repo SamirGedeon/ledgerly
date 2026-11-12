@@ -1,0 +1,3 @@
+external_id,date,description,kind,amount,category
+example-001,2026-11-12,Assinatura de software,expense,49.90,Software
+example-002,2026-11-13,Projeto concluido,income,1500.00,Projetos
