@@ -1,0 +1,17 @@
+# Local runtime artifacts
+.env
+.env.*
+!.env.example
+backend/.bundle/
+backend/vendor/
+backend/log/*
+backend/tmp/*
+!backend/log/.keep
+!backend/tmp/.keep
+backend/config/master.key
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tsbuildinfo
+.DS_Store
