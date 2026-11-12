@@ -1,0 +1,68 @@
+name: Quality checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  fullstack:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ledgerly
+          POSTGRES_PASSWORD: ledgerly
+          POSTGRES_DB: ledgerly_development
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ledgerly"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://ledgerly:ledgerly@localhost:5432/ledgerly_development
+      TEST_DATABASE_URL: postgres://ledgerly:ledgerly@localhost:5432/ledgerly_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Prepare database and test API
+        working-directory: backend
+        run: |
+          bundle exec rails db:prepare db:seed
+          RAILS_ENV=test bundle exec rails db:prepare
+          bundle exec rspec
+      - name: Install web dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Check formatting, types and production build
+        working-directory: frontend
+        run: |
+          npm run format:check
+          npm run build
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start API
+        working-directory: backend
+        run: |
+          bundle exec rails server -b 0.0.0.0 -p 3001 > /tmp/ledgerly-api.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail http://localhost:3001/up; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/ledgerly-api.log
+          exit 1
+      - name: Browser integration tests
+        working-directory: frontend
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-failures
+          path: frontend/test-results/

@@ -1,0 +1,44 @@
+name: ledgerly
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ledgerly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ledgerly}
+      POSTGRES_DB: ledgerly_development
+    volumes:
+      - ledgerly_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerly -d ledgerly_development"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://ledgerly:${POSTGRES_PASSWORD:-ledgerly}@db:5432/ledgerly_development
+      TEST_DATABASE_URL: postgres://ledgerly:${POSTGRES_PASSWORD:-ledgerly}@db:5432/ledgerly_test
+      FRONTEND_ORIGIN: http://localhost:5174
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-Ledgerly-demo-2026!}
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "bundle exec rails db:prepare db:seed && exec bundle exec rails server -b 0.0.0.0 -P /tmp/ledgerly.pid"]
+    healthcheck:
+      test: ["CMD", "ruby", "-rnet/http", "-e", "exit(Net::HTTP.get_response(URI('http://localhost:3000/up')).code == '200' ? 0 : 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  web:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:3000
+    ports:
+      - "127.0.0.1:5174:5174"
+    depends_on:
+      api:
+        condition: service_healthy
+volumes:
+  ledgerly_data:
